@@ -4,61 +4,54 @@ const fetch = require("node-fetch");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ Твой Discord Webhook
-const webhook = "https://discord.com/api/webhooks/1397128931567603742/ICteuf__9KOTzicVn7lysg7AFbe16q7o2lebabbArWxq-t9bHrfPCbbiVY3zLZTJI9xT";
+// ✅ Замените на свой Discord webhook
+const webhookUrl = "https://discord.com/api/webhooks/1397128927222169690/RMNYuy4W6sY9jhQX6t7EJRhI1fpAI3iNIV88PnRToi7LKKm-drsTeiLQ1O8ZgJAfOl-J";
 
-// Поддержка JSON и URL-encoded запросов
-app.use(express.json());
+// 👇 Позволяет Express читать URL-параметры
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-// ✅ GET-запрос: ?msg=...
-app.get("/", async (req, res) => {
-  const msg = req.query.msg;
-
-  if (!msg) {
-    return res.status(400).send("❌ Missing 'msg' parameter");
-  }
-
+app.post("/", async (req, res) => {
   try {
-    const response = await fetch(webhook, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: msg })
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      return res.status(500).send("❌ Discord error: " + error);
+    const msg = req.body.embeds || req.body.content || req.body.msg;
+    if (!msg) {
+      return res.status(400).json({ error: "No message content provided." });
     }
 
-    res.send("✅ Text message sent to Discord");
+    // Удалим возможные Discord-форматирования (```, `)
+    const cleaned = JSON.stringify(msg)
+      .replace(/```/g, "")
+      .replace(/`/g, "")
+      .trim();
+
+    const payload = {
+      content: null,
+      embeds: JSON.parse(cleaned),
+    };
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok) {
+      res.status(200).json({ status: "✅ Webhook sent successfully." });
+    } else {
+      const text = await response.text();
+      res.status(response.status).json({ error: text });
+    }
   } catch (err) {
-    console.error("❌ Error:", err);
-    res.status(500).send("❌ Internal server error");
+    console.error("Ошибка:", err);
+    res.status(500).json({ error: "Internal Server Error", details: err.message });
   }
 });
 
-// ✅ POST-запрос: JSON-данные (например, embeds)
-app.post("/", async (req, res) => {
-  try {
-    const response = await fetch(webhook, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body)
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      return res.status(500).send("❌ Discord error: " + error);
-    }
-
-    res.send("✅ JSON payload sent to Discord");
-  } catch (err) {
-    console.error("❌ Error:", err);
-    res.status(500).send("❌ Internal server error");
-  }
+// Заглушка на GET, чтобы Render не ругался на отсутствие маршрутов
+app.get("/", (req, res) => {
+  res.send("Nameless Webhook Service работает ✅");
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Discord proxy is running at http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
